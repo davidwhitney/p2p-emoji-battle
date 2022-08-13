@@ -1,7 +1,7 @@
+// This will be removed when https://github.com/ably-labs/react-hooks/pull/17 is merged
+
 import { assertConfiguration } from "@ably-labs/react-hooks";
 import { useEffect } from "react";
-
-// This will be removed when https://github.com/ably-labs/react-hooks/pull/17 is merged
 
 export function useChannel(channelNameOrNameAndOptions, ...channelSubscriptionArguments): any {
     const ably = assertConfiguration();

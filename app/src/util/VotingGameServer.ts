@@ -13,52 +13,62 @@ export default class VotingGameServer {
 
     private tickLength: number;
     private maxTicks: number;
+    private interval: any;
 
     private onStateChange: (state: GameState) => void;
 
     public get isActive() {
-        return this.gameState.phase === "playing";
+        return this.gameState?.phase === "playing";
+    }
+
+    public get isRunning() {
+        return this.interval !== undefined;
     }
 
     constructor() {
         this.tickLength = 1000;
-        this.maxTicks = 15;    
+        this.maxTicks = 15;
+        this.resetGame();
+    }
 
+    public setState(state: GameState) {
+        this.gameState = state;
+        this.onStateChange && this.onStateChange(this.gameState);
+    }
+
+    public resetGame() {
         this.gameState = {
             ...defaultState,
             isStarted: false,
-            timeRemaining: this.maxTicks
+            timeRemaining: this.tickLength * this.maxTicks,
+            votes: []
         };
+        return true;
     }
 
-    public start(onStateChange: (state: GameState) => void) {
+    public start(onStateChange: (state: GameState) => void) {        
+        this.gameState.isStarted = true;
+        this.gameState.phase = "playing";
+
         this.onStateChange = onStateChange;
+        this.onStateChange && this.onStateChange(this.gameState);
+        this.startTicking();
+    }
 
-        this.gameState = {
-            ...this.gameState,
-            phase: "playing",
-            votes: [],
-            isStarted: true
-        };
-
-        onStateChange && onStateChange(this.gameState);
-
-        let tick = 1;
-        const interval = setInterval(() => {
+    public startTicking() {
+        this.interval = setInterval(() => {
 
             this.gameState = {
                 ...this.gameState,
-                timeRemaining: this.maxTicks - tick,
+                timeRemaining: this.gameState.timeRemaining -= this.tickLength,
             } as GameState;
 
-            onStateChange && onStateChange(this.gameState);
+            this.onStateChange && this.onStateChange(this.gameState);
 
-            tick++;
-
-            if (tick >= this.maxTicks) {
+            if (this.gameState.timeRemaining <= 0) {
                 this.gameState.phase = "finished";
-                clearInterval(interval);
-                onStateChange && onStateChange(this.gameState);
+                clearInterval(this.interval);
+                this.onStateChange && this.onStateChange(this.gameState);
             }
         }, this.tickLength);
     }

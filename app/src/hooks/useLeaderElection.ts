@@ -1,10 +1,14 @@
-import { assertConfiguration, ChannelParameters, usePresence } from "@ably-labs/react-hooks";
+import { assertConfiguration, ChannelParameters } from "@ably-labs/react-hooks";
+import { usePresence } from "./usePresence";
+import { Types } from "ably";
 import { useEffect, useState } from "react";
 
 interface ElectionRecord {
     clientId: string;
     leader: boolean;
 }
+
+const sortByConnectionId = (a: Types.PresenceMessage, b: Types.PresenceMessage) => (a.connectionId as any) - (b.connectionId as any);
 
 export function useLeaderElection(channelNameOrNameAndOptions: ChannelParameters, onElection: () => void): string {
     const ably = assertConfiguration();
@@ -21,10 +25,7 @@ export function useLeaderElection(channelNameOrNameAndOptions: ChannelParameters
         ? ably.channels.get(channelName) 
         : ably.channels.get(channelName, channelNameOrNameAndOptions.options); 
 
-    const initalState: ElectionRecord = {
-        clientId: ably.auth.clientId,
-        leader: false
-    };
+    const initalState: ElectionRecord = { clientId: ably.auth.clientId, leader: false };
 
     const [_, updateStatus] = usePresence(channelName, initalState, async (presenceData) => {
         const members = await channel.presence.get();        
@@ -34,7 +35,7 @@ export function useLeaderElection(channelNameOrNameAndOptions: ChannelParameters
             return;
         }
 
-        const sortedMembers = members.sort((a, b) => (a.connectionId as any) - (b.connectionId as any));
+        const sortedMembers = members.sort(sortByConnectionId);
     
         if (sortedMembers[0].clientId === ably.auth.clientId) {
     
@@ -45,14 +46,17 @@ export function useLeaderElection(channelNameOrNameAndOptions: ChannelParameters
 
             setLeaderId(ably.auth.clientId);            
             onElection();
-        } 
+        }
     });
 
     useEffect(() => {
         (async () => {
             const members = await channel.presence.get();
-            const sortedMembers = members.sort((a, b) => (a.connectionId as any) - (b.connectionId as any));
-            setLeaderId(sortedMembers[0].clientId);
+            const sortedMembers = members.sort(sortByConnectionId);
+            
+            if (sortedMembers.length > 0) {
+                setLeaderId(sortedMembers[0].clientId);
+            }
         })();
     }, []);
 
