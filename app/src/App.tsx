@@ -1,30 +1,32 @@
-import { useEffect, useState } from 'react';
-import logo from './logo.svg';
+import { useState } from 'react';
+import Header from './components/Header';
+import Join, { JoinCallback } from "./components/Join";
+import Game from "./components/game/Game";
+import { configureAbly } from "@ably-labs/react-hooks";
 import './App.css';
 
-export default function App() {
-    const [apiData, setApiData] = useState({});
+const clientId = Math.floor(Math.random() * 1000000) + "";
 
-    useEffect(() => {
-        (async () => {
-            const result = await fetch('/api/hello');
-            const data = await result.json();
-            setApiData(data);
-        })();
-    }, []);
+configureAbly({ authUrl: "/api/ably-token-request?clientId=" + clientId, clientId: clientId });
+
+export default function App() {
+
+    const [inLobby, setInLobby] = useState(true);
+    const [gameName, setGameName] = useState("");
+    const [playerName, setPlayerName] = useState("");
+
+    const joinGame: JoinCallback = (gameName: string, playerName: string) => {
+        console.log(`Joining game ${gameName} as ${playerName}`);
+        setGameName(gameName);
+        setPlayerName(playerName);
+        setInLobby(false);
+    };
 
     return (
         <div className="App">
-            <header role="header" className="App-header">
-                <img src={logo} className="App-logo" alt="logo" />
-                <p>Hello Vite + React!</p>
-                <p>
-                    Edit <code>App.tsx</code> and save to test HMR updates.
-                </p>
-                <p>
-                    API Data: {JSON.stringify(apiData)};
-                </p>
-            </header>
+            <Header />
+            {inLobby && <Join onJoin={joinGame} />}
+            {!inLobby && <Game playerName={playerName} gameName={gameName} />}
         </div>
     )
 }
