@@ -1,19 +1,25 @@
 import { assertConfiguration, ChannelParameters } from "@ably-labs/react-hooks";
 import { usePresence } from "./usePresence";
 import { Types } from "ably";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
-interface ElectionRecord {
-    clientId: string;
+interface StateEnvelope {
     leader: boolean;
+    state: any;
 }
 
 const sortByConnectionId = (a: Types.PresenceMessage, b: Types.PresenceMessage) => (a.connectionId as any) - (b.connectionId as any);
 
-export function useLeaderElection(channelNameOrNameAndOptions: ChannelParameters, onElection: () => void): string {
+export type LeaderStateUpdateFunction<T> = (state: T) => void;
+export type LeaderStateUpdateCallback<T> = (arg0: T) => void;
+export type UseStateResponse<T> = [T, boolean, LeaderStateUpdateFunction<T>];
+
+export function useLeaderElection<T = any>(channelNameOrNameAndOptions: ChannelParameters, defaultLeaderState: T, onElection: LeaderStateUpdateCallback<T>): UseStateResponse<T> {
     const ably = assertConfiguration();
 
     const [leaderId, setLeaderId] = useState<string | undefined>(undefined);
+    const [lastKnownLeaderData, setLastKnownLeaderData] = useState<T>(null);
+    const [newLeaderWasElected, setNewLeaderWasElected] = useState(false);
 
     let channelName = typeof channelNameOrNameAndOptions === 'string'
         ? channelNameOrNameAndOptions 
@@ -23,43 +29,48 @@ export function useLeaderElection(channelNameOrNameAndOptions: ChannelParameters
 
     const channel = typeof channelNameOrNameAndOptions === 'string'
         ? ably.channels.get(channelName) 
-        : ably.channels.get(channelName, channelNameOrNameAndOptions.options); 
-
-    const initalState: ElectionRecord = { clientId: ably.auth.clientId, leader: false };
-
-    const [_, updateStatus] = usePresence(channelName, initalState, async (presenceData) => {
-        const members = await channel.presence.get();        
-        const leader = members.find(s => s.data.leader === true);
+        : ably.channels.get(channelName, channelNameOrNameAndOptions.options);        
     
+    const initalState: StateEnvelope = { leader: false, state: null };
+
+    const [presenceData, updateStatus] = usePresence(channelName, initalState, async (message, presenceAction) => {
+        if (message?.data?.leader) {
+            setLastKnownLeaderData(message.data.state);
+        }
+
+        const members = await channel.presence.get();
+        const leader = members.find(s => s.data.leader === true);  
+        
         if (leader) {
             return;
         }
 
         const sortedMembers = members.sort(sortByConnectionId);
+        const hasBeenElected = sortedMembers[0].clientId === ably.auth.clientId;
     
-        if (sortedMembers[0].clientId === ably.auth.clientId) {
-    
-            updateStatus({
-                clientId: ably.auth.clientId,
-                leader: true
-            });
-
-            setLeaderId(ably.auth.clientId);            
-            onElection();
+        if (hasBeenElected) {
+            setLeaderId(ably.auth.clientId);
+            setNewLeaderWasElected(true);         
         }
     });
 
-    useEffect(() => {
-        (async () => {
-            const members = await channel.presence.get();
-            const sortedMembers = members.sort(sortByConnectionId);
-            
-            if (sortedMembers.length > 0) {
-                setLeaderId(sortedMembers[0].clientId);
-            }
-        })();
-    }, []);
+    if (newLeaderWasElected) {
+        setNewLeaderWasElected(false);
+        updateStatus({ leader: true, state: lastKnownLeaderData });
+        onElection(lastKnownLeaderData);
+    }
+    
+    const leaderUpdateFunction = (state: T) => {
+        updateStatus({ leader: true, state: state });
+    }
 
-    return leaderId;
+    const notLeaderUpdateFunction = (state: T) => {
+        console.log("Updated attempted by non-leader.");
+    }
+
+    const isHost = leaderId == ably.auth.clientId;
+    const dataToReturn = lastKnownLeaderData;// || presenceData.find(s => s.data.leader === true)?.data.state; 
+    const updateFunction = isHost ? leaderUpdateFunction : notLeaderUpdateFunction;
+    return [ dataToReturn, isHost, updateFunction ];
 
 }

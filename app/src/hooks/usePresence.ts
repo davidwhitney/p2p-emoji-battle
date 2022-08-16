@@ -9,7 +9,8 @@ export type PresenceDataAndPresenceUpdateFunction<T> = [
     updateStatus: (messageOrPresenceObject: T) => void
 ];
 
-export type OnPresenceMessageReceived<T> = (presenceData: PresenceMessage<T>) => void;
+export type PresenceAction = "enter" | "leave" | "update";
+export type OnPresenceMessageReceived<T> = (presenceData: PresenceMessage<T>, presenceAction?: PresenceAction) => void;
 export type UseStatePresenceUpdate = (presenceData: Types.PresenceMessage[]) => void;
 
 export function usePresence<T = any>(channelNameOrNameAndOptions: ChannelParameters, messageOrPresenceObject?: T, onPresenceUpdated?: OnPresenceMessageReceived<T>): PresenceDataAndPresenceUpdateFunction<T> {
@@ -25,17 +26,17 @@ export function usePresence<T = any>(channelNameOrNameAndOptions: ChannelParamet
 
     const [presenceData, updatePresenceData] = useState([]) as [Array<PresenceMessage<T>>, UseStatePresenceUpdate];
 
-    const updatePresence = async (message?: Types.PresenceMessage) => {
+    const updatePresence = async (message: Types.PresenceMessage, presenceAction: string) => {
         const snapshot = await channel.presence.get();
         updatePresenceData(snapshot);
         
-        onPresenceUpdated?.call(this, message);
+        onPresenceUpdated?.call(this, message, presenceAction);
     }
 
     const onMount = async () => {
-        channel.presence.subscribe('enter', updatePresence);
-        channel.presence.subscribe('leave', updatePresence);
-        channel.presence.subscribe('update', updatePresence);
+        channel.presence.subscribe('enter', (e) => { updatePresence(e, "enter"); });
+        channel.presence.subscribe('leave', (e) => { updatePresence(e, "leave"); });
+        channel.presence.subscribe('update', (e) => { updatePresence(e, "update"); });
 
         await channel.presence.enter(messageOrPresenceObject);
 
