@@ -15,7 +15,7 @@ export default class VotingGameServer {
     private maxTicks: number;
     private interval: any;
 
-    private onStateChange: (state: GameState) => void;
+    private _onStateChange: (state: GameState) => void;
 
     public get isActive() {
         return this.gameState?.phase === "playing";
@@ -33,7 +33,7 @@ export default class VotingGameServer {
 
     public setState(state: GameState) {
         this.gameState = state;
-        this.onStateChange && this.onStateChange(this.gameState);
+        this._onStateChange && this._onStateChange(this.gameState);
     }
 
     public resetGame() {
@@ -46,12 +46,15 @@ export default class VotingGameServer {
         return true;
     }
 
-    public start(onStateChange: (state: GameState) => void) {        
+    public onStateChange(callback: (state: GameState) => void) {
+        this._onStateChange = callback;
+    }
+
+    public start() {        
         this.gameState.isStarted = true;
         this.gameState.phase = "playing";
 
-        this.onStateChange = onStateChange;
-        this.onStateChange && this.onStateChange(this.gameState);
+        this._onStateChange && this._onStateChange(this.gameState);
         this.startTicking();
     }
 
@@ -63,17 +66,17 @@ export default class VotingGameServer {
                 timeRemaining: this.gameState.timeRemaining -= this.tickLength,
             } as GameState;
 
-            this.onStateChange && this.onStateChange(this.gameState);
+            this._onStateChange && this._onStateChange(this.gameState);
 
             if (this.gameState.timeRemaining <= 0) {
                 this.gameState.phase = "finished";
                 clearInterval(this.interval);
-                this.onStateChange && this.onStateChange(this.gameState);
+                this._onStateChange && this._onStateChange(this.gameState);
             }
         }, this.tickLength);
     }
 
-    public logVote(value: string): GameState {
+    public recordVote(value: string): GameState {
         if (this?.gameState?.phase !== "playing") {
              return;
         }
@@ -85,7 +88,7 @@ export default class VotingGameServer {
             this.gameState.votes.push({ value, count: 1 });
         }
         
-        this.onStateChange && this.onStateChange(this.gameState);
+        this._onStateChange && this._onStateChange(this.gameState);
         return this.gameState;
     }
 }

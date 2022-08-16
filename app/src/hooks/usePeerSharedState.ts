@@ -1,5 +1,5 @@
 import { assertConfiguration, ChannelParameters } from "@ably-labs/react-hooks";
-import { usePresence } from "./usePresence";
+import { usePresence } from "@ably-labs/react-hooks";
 import { Types } from "ably";
 import { useState } from "react";
 
@@ -12,20 +12,18 @@ const sortByConnectionId = (a: Types.PresenceMessage, b: Types.PresenceMessage) 
 
 export type LeaderStateUpdateFunction<T> = (state: T) => void;
 export type LeaderStateUpdateCallback<T> = (arg0: T) => void;
-export type UseStateResponse<T> = [T, boolean, LeaderStateUpdateFunction<T>];
+export type UseStateResponse<T> = [T, LeaderStateUpdateFunction<T>, boolean];
 
-export function useLeaderElection<T = any>(channelNameOrNameAndOptions: ChannelParameters, defaultLeaderState: T, onElection: LeaderStateUpdateCallback<T>): UseStateResponse<T> {
+export function usePeerSharedState<T = any>(channelNameOrNameAndOptions: ChannelParameters, defaultLeaderState: T, onElection: LeaderStateUpdateCallback<T>): UseStateResponse<T> {
     const ably = assertConfiguration();
 
     const [leaderId, setLeaderId] = useState<string | undefined>(undefined);
-    const [lastKnownLeaderData, setLastKnownLeaderData] = useState<T>(null);
+    const [lastKnownLeaderData, setLastKnownLeaderData] = useState<T>(defaultLeaderState);
     const [newLeaderWasElected, setNewLeaderWasElected] = useState(false);
 
-    let channelName = typeof channelNameOrNameAndOptions === 'string'
+    const channelName = typeof channelNameOrNameAndOptions === 'string'
         ? channelNameOrNameAndOptions 
         : channelNameOrNameAndOptions.channelName;
-
-    channelName = channelName + ":elections";
 
     const channel = typeof channelNameOrNameAndOptions === 'string'
         ? ably.channels.get(channelName) 
@@ -33,7 +31,7 @@ export function useLeaderElection<T = any>(channelNameOrNameAndOptions: ChannelP
     
     const initalState: StateEnvelope = { leader: false, state: null };
 
-    const [presenceData, updateStatus] = usePresence(channelName, initalState, async (message, presenceAction) => {
+    const [presenceData, updateStatus] = usePresence(channelName, initalState, async (message) => {
         if (message?.data?.leader) {
             setLastKnownLeaderData(message.data.state);
         }
@@ -55,6 +53,8 @@ export function useLeaderElection<T = any>(channelNameOrNameAndOptions: ChannelP
     });
 
     if (newLeaderWasElected) {
+        console.info("This peer is now the leader.");
+
         setNewLeaderWasElected(false);
         updateStatus({ leader: true, state: lastKnownLeaderData });
         onElection(lastKnownLeaderData);
@@ -65,12 +65,12 @@ export function useLeaderElection<T = any>(channelNameOrNameAndOptions: ChannelP
     }
 
     const notLeaderUpdateFunction = (state: T) => {
-        console.log("Updated attempted by non-leader.");
+        console.info("Updated invoked by non-leader, skipped. You can supress this message by checking isHost before invocation.");
     }
 
     const isHost = leaderId == ably.auth.clientId;
-    const dataToReturn = lastKnownLeaderData;// || presenceData.find(s => s.data.leader === true)?.data.state; 
+    const dataToReturn = lastKnownLeaderData;
     const updateFunction = isHost ? leaderUpdateFunction : notLeaderUpdateFunction;
-    return [ dataToReturn, isHost, updateFunction ];
+    return [ dataToReturn, updateFunction, isHost ];
 
 }

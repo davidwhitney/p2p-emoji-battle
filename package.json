@@ -15,7 +15,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@ably-labs/react-hooks": "^2.0.7",
+    "@ably-labs/react-hooks": "^2.0.9",
     "ably": "^1.2.29",
     "dotenv": "^16.0.1",
     "react": ">=18.1.0",
