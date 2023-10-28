@@ -38,7 +38,7 @@ export default class VotingGameServer {
 
     public resetGame() {
         this.gameState = {
-            ...defaultState,
+            phase: "idle",
             isStarted: false,
             timeRemaining: this.tickLength * this.maxTicks,
             votes: []
@@ -50,12 +50,20 @@ export default class VotingGameServer {
         this._onStateChange = callback;
     }
 
-    public start() {        
+    public start() {
         this.gameState.isStarted = true;
         this.gameState.phase = "playing";
 
         this._onStateChange && this._onStateChange(this.gameState);
         this.startTicking();
+    }
+
+    public resume(lastLeaderState: GameState) {
+        this.setState(lastLeaderState);
+
+        if (this.isActive && !this.isRunning) {
+            this.start();
+        }
     }
 
     public startTicking() {
@@ -78,7 +86,7 @@ export default class VotingGameServer {
 
     public recordVote(value: string): GameState {
         if (this?.gameState?.phase !== "playing") {
-             return;
+            return;
         }
 
         const voteState = this.gameState.votes.find(x => x.value === value);
@@ -87,15 +95,8 @@ export default class VotingGameServer {
         } else {
             this.gameState.votes.push({ value, count: 1 });
         }
-        
+
         this._onStateChange && this._onStateChange(this.gameState);
         return this.gameState;
     }
 }
-
-export const defaultState: GameState = {
-    phase: "idle",
-    isStarted: false,
-    timeRemaining: 0,
-    votes: [],
-};

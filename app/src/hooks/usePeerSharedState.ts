@@ -22,13 +22,13 @@ export function usePeerSharedState<T = any>(channelNameOrNameAndOptions: Channel
     const [newLeaderWasElected, setNewLeaderWasElected] = useState(false);
 
     const channelName = typeof channelNameOrNameAndOptions === 'string'
-        ? channelNameOrNameAndOptions 
+        ? channelNameOrNameAndOptions
         : channelNameOrNameAndOptions.channelName;
 
     const channel = typeof channelNameOrNameAndOptions === 'string'
-        ? ably.channels.get(channelName) 
-        : ably.channels.get(channelName, channelNameOrNameAndOptions.options);        
-    
+        ? ably.channels.get(channelName)
+        : ably.channels.get(channelName, channelNameOrNameAndOptions.options);
+
     const initalState: StateEnvelope = { leader: false, state: null };
 
     const [presenceData, updateStatus] = usePresence(channelName, initalState, async (message) => {
@@ -37,18 +37,18 @@ export function usePeerSharedState<T = any>(channelNameOrNameAndOptions: Channel
         }
 
         const members = await channel.presence.get();
-        const leader = members.find(s => s.data.leader === true);  
-        
+        const leader = members.find(s => s.data.leader === true);
+
         if (leader) {
             return;
         }
 
         const sortedMembers = members.sort(sortByConnectionId);
         const hasBeenElected = sortedMembers[0].clientId === ably.auth.clientId;
-    
+
         if (hasBeenElected) {
             setLeaderId(ably.auth.clientId);
-            setNewLeaderWasElected(true);         
+            setNewLeaderWasElected(true);
         }
     });
 
@@ -59,18 +59,20 @@ export function usePeerSharedState<T = any>(channelNameOrNameAndOptions: Channel
         updateStatus({ leader: true, state: lastKnownLeaderData });
         onElection(lastKnownLeaderData);
     }
-    
+
     const leaderUpdateFunction = (state: T) => {
         updateStatus({ leader: true, state: state });
     }
 
     const notLeaderUpdateFunction = (state: T) => {
-        console.info("Updated invoked by non-leader, skipped. You can supress this message by checking isHost before invocation.");
+        // NOOP
+        // Perhaps in dev mode...
+        // console.info("Updated invoked by non-leader, skipped. You can supress this message by checking isHost before invocation.");
     }
 
     const isHost = leaderId == ably.auth.clientId;
-    const dataToReturn = lastKnownLeaderData;
-    const updateFunction = isHost ? leaderUpdateFunction : notLeaderUpdateFunction;
-    return [ dataToReturn, updateFunction, isHost ];
+    const sharedState = lastKnownLeaderData;
+    const broadcastIfHost = isHost ? leaderUpdateFunction : notLeaderUpdateFunction;
+    return [sharedState, broadcastIfHost, isHost];
 
 }

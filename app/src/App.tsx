@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import Header from './components/Header';
 import Join, { JoinCallback } from "./components/Join";
-import Game from "./components/game/Game";
+import VotingComponent from "./components/game";
 import { configureAbly } from "@ably-labs/react-hooks";
 import './App.css';
 
@@ -26,7 +26,7 @@ export default function App() {
         <div className="App">
             <Header />
             {inLobby && <Join onJoin={joinGame} />}
-            {!inLobby && <Game playerName={playerName} gameName={gameName} />}
+            {!inLobby && <VotingComponent playerName={playerName} gameName={gameName} />}
         </div>
     )
 }
