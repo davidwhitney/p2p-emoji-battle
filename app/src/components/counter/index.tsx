@@ -1,11 +1,9 @@
 import { usePeerSharedState } from "../../hooks/usePeerSharedState";
-import { useChannel } from "../../hooks/useChannel";
-//import { useChannel } from "@ably-labs/react-hooks";
-// Had to modify the hook to make it recompute some stuff.
+import { useChannel } from "ably/react";
 
 export default function Index({ channelName, playerName }) {    
     const [state, updateState, isHost] = usePeerSharedState(channelName, 0);
-    const [channel] = useChannel(channelName, () => {
+    const { channel } = useChannel(channelName, () => {
         updateState((current) => { return current + 1; });
     });
     

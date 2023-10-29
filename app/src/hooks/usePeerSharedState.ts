@@ -1,5 +1,4 @@
-import { assertConfiguration, ChannelParameters } from "@ably-labs/react-hooks";
-import { usePresence } from "@ably-labs/react-hooks";
+import { ChannelParameters, useAbly, usePresence } from 'ably/react'
 import { Types } from "ably";
 import { useState } from "react";
 
@@ -18,7 +17,7 @@ export type LeaderStateUpdateCallback<T> = (arg0: T) => void;
 export type UseStateResponse<T> = [T, ReactUseStateCallback<T>, boolean];
 
 export function usePeerSharedState<T = any>(channelNameOrNameAndOptions: ChannelParameters, defaultLeaderState: T, onElection: LeaderStateUpdateCallback<T> = null): UseStateResponse<T> {
-    const ably = assertConfiguration();
+    const ably = useAbly();
 
     const [leaderId, setLeaderId] = useState("");
     const [leaderData, setLeaderData] = useState<T>(defaultLeaderState);
@@ -36,7 +35,7 @@ export function usePeerSharedState<T = any>(channelNameOrNameAndOptions: Channel
 
     const initalState: StateEnvelope = { leader: false, state: null };
 
-    const [_, updateMyPresence] = usePresence(channelName, initalState, async (message) => {
+    usePresence(channelName, initalState, async (message) => {
         if (message?.data?.leader) {
             setLeaderData(message.data.state);
         }
@@ -59,16 +58,17 @@ export function usePeerSharedState<T = any>(channelNameOrNameAndOptions: Channel
         }
     });
 
+
     if (triggerElection) {
-        updateMyPresence({ leader: true, state: leaderData });
-        onElection?.call(leaderData);
         setTriggerElection(false);
+        channel.presence.update({ leader: true, state: leaderData });
+        onElection?.call(leaderData);
     }
 
     if (broadcast) {
-        const isLeader = leaderId === ably.auth?.clientId + "";
-        updateMyPresence({ leader: isLeader, state: leaderData });
         setBroadcast(false);
+        const isLeader = leaderId === ably.auth?.clientId + "";
+        channel.presence.update({ leader: isLeader, state: leaderData });
     }
 
     const nonLeaderUpdateFunction = (update: SetStateAction<T>) => {

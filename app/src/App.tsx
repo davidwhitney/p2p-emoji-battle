@@ -2,15 +2,13 @@ import { useState } from 'react';
 import Header from './components/Header';
 import Join, { JoinCallback } from "./components/Join";
 import Component from "./components/counter";
-import { configureAbly } from "@ably-labs/react-hooks";
 import './App.css';
-import { configureAbly as configureAbly2 } from "@ably-labs/react-hooks/src/AblyReactHooks";
+
+import Ably from "ably/promises";
+import { AblyProvider } from 'ably/react'
 
 const clientId = Math.floor(Math.random() * 1000000) + "";
-
-configureAbly({ authUrl: "/api/ably-token-request?clientId=" + clientId, clientId: clientId });
-configureAbly2({ authUrl: "/api/ably-token-request?clientId=" + clientId, clientId: clientId });
-
+const client = new Ably.Realtime.Promise({ authUrl: "/api/ably-token-request?clientId=" + clientId });
 
 export default function App() {
 
@@ -26,10 +24,12 @@ export default function App() {
     };
 
     return (
-        <div className="App">
-            <Header />
-            {inLobby && <Join onJoin={joinGame} />}
-            {!inLobby && <Component playerName={playerName} channelName={gameName} />}
-        </div>
+        <AblyProvider client={client}>
+            <div className="App">
+                <Header />
+                {inLobby && <Join onJoin={joinGame} />}
+                {!inLobby && <Component playerName={playerName} channelName={gameName} />}
+            </div>
+        </AblyProvider>
     )
 }

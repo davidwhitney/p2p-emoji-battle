@@ -1,4 +1,4 @@
-import { useChannel } from "@ably-labs/react-hooks";
+import { useChannel } from "ably/react";
 import { useState } from "react";
 import { usePeerSharedState } from "../../hooks/usePeerSharedState";
 import VotingGameServer, { GameState } from "./VotingGameServer";
@@ -7,16 +7,13 @@ import Ably from "ably";
 export default function Index({ channelName, playerName }) {
     const [game] = useState(new VotingGameServer());
 
-    const [sharedState, broadcastIfHost, isHost] = usePeerSharedState(channelName, game.gameState, (lastLeaderState) => {        
-        game.resume(lastLeaderState);
-    });
-
-    game.onStateChange((state) => { 
-        broadcastIfHost(state);
-    });
-
-    const [channel] = useChannel(channelName, (message: Ably.Types.Message) => {
+    const [sharedState, updateState, isHost] = usePeerSharedState(channelName, game.gameState);
+    const { channel } = useChannel(channelName, (message: Ably.Types.Message) => {
         game.recordVote(message.data.value);
+    });
+    
+    game.onStateChange((state) => { 
+        updateState(state);
     });
 
     const vote = (item) => { 
