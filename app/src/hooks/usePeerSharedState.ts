@@ -17,9 +17,9 @@ export type UseStateResponse<T> = [T, LeaderStateUpdateFunction<T>, boolean];
 export function usePeerSharedState<T = any>(channelNameOrNameAndOptions: ChannelParameters, defaultLeaderState: T, onElection: LeaderStateUpdateCallback<T>): UseStateResponse<T> {
     const ably = assertConfiguration();
 
-    const [leaderId, setLeaderId] = useState<string | undefined>(undefined);
-    const [lastKnownLeaderData, setLastKnownLeaderData] = useState<T>(defaultLeaderState);
-    const [newLeaderWasElected, setNewLeaderWasElected] = useState(false);
+    const [leaderId, setLeaderId] = useState("");
+    const [leaderData, setLeaderData] = useState<T>(defaultLeaderState);
+    const [requiresElectionBroadcast, setRequiresElectionBroadcast] = useState(false);
 
     const channelName = typeof channelNameOrNameAndOptions === 'string'
         ? channelNameOrNameAndOptions
@@ -31,48 +31,45 @@ export function usePeerSharedState<T = any>(channelNameOrNameAndOptions: Channel
 
     const initalState: StateEnvelope = { leader: false, state: null };
 
-    const [presenceData, updateStatus] = usePresence(channelName, initalState, async (message) => {
+    const [presenceData, updateMyPresence] = usePresence(channelName, initalState, async (message) => {
         if (message?.data?.leader) {
-            setLastKnownLeaderData(message.data.state);
+            setLeaderData(message.data.state);
         }
 
         const members = await channel.presence.get();
         const leader = members.find(s => s.data.leader === true);
 
         if (leader) {
+            setLeaderId(leader?.clientId + "");
             return;
         }
 
         const sortedMembers = members.sort(sortByConnectionId);
-        const hasBeenElected = sortedMembers[0].clientId === ably.auth.clientId;
+        const hasBeenElected = sortedMembers[0].clientId + "" === ably.auth?.clientId + "";
 
         if (hasBeenElected) {
-            setLeaderId(ably.auth.clientId);
-            setNewLeaderWasElected(true);
+            setLeaderId(ably.auth?.clientId + "");
+            updateMyPresence({ leader: true, state: leaderData });
+            setRequiresElectionBroadcast(true);
         }
     });
 
-    if (newLeaderWasElected) {
-        console.info("This peer is now the leader.");
-
-        setNewLeaderWasElected(false);
-        updateStatus({ leader: true, state: lastKnownLeaderData });
-        onElection(lastKnownLeaderData);
+    if (requiresElectionBroadcast) {
+        setRequiresElectionBroadcast(false);
+        onElection(leaderData);
     }
 
     const leaderUpdateFunction = (state: T) => {
-        updateStatus({ leader: true, state: state });
+        const isLeader = leaderId === ably.auth?.clientId + "";
+        updateMyPresence({ leader: isLeader, state: state });
     }
 
-    const notLeaderUpdateFunction = (state: T) => {
-        // NOOP
-        // Perhaps in dev mode...
-        // console.info("Updated invoked by non-leader, skipped. You can supress this message by checking isHost before invocation.");
+    const nonLeaderUpdateFunction = (state: T) => {
     }
 
-    const isHost = leaderId == ably.auth.clientId;
-    const sharedState = lastKnownLeaderData;
-    const broadcastIfHost = isHost ? leaderUpdateFunction : notLeaderUpdateFunction;
-    return [sharedState, broadcastIfHost, isHost];
+    const isHost = leaderId === ably.auth?.clientId + "";
+    const broadcastIfHost = isHost ? leaderUpdateFunction : (_: T) => { /* NOOP */ };
+
+    return [leaderData, broadcastIfHost, isHost];
 
 }

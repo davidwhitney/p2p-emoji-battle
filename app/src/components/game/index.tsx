@@ -4,10 +4,10 @@ import { usePeerSharedState } from "../../hooks/usePeerSharedState";
 import VotingGameServer, { GameState } from "./VotingGameServer";
 import Ably from "ably";
 
-export default function Index({ gameName, playerName }) {
+export default function Index({ channelName, playerName }) {
     const [game] = useState(new VotingGameServer());
 
-    const [sharedState, broadcastIfHost, isHost] = usePeerSharedState(gameName, game.gameState, (lastLeaderState) => {        
+    const [sharedState, broadcastIfHost, isHost] = usePeerSharedState(channelName, game.gameState, (lastLeaderState) => {        
         game.resume(lastLeaderState);
     });
 
@@ -15,7 +15,7 @@ export default function Index({ gameName, playerName }) {
         broadcastIfHost(state);
     });
 
-    const [channel] = useChannel(gameName, (message: Ably.Types.Message) => {
+    const [channel] = useChannel(channelName, (message: Ably.Types.Message) => {
         game.recordVote(message.data.value);
     });
 
@@ -31,7 +31,7 @@ export default function Index({ gameName, playerName }) {
 
     return (
         <>
-            <GameStatusBar gameName={gameName} playerName={playerName} isHost={isHost} game={sharedState} />
+            <GameStatusBar gameName={channelName} playerName={playerName} isHost={isHost} game={sharedState} />
             {hostControls}
             {voteUi}
             {scores}
