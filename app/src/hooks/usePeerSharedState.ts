@@ -10,16 +10,21 @@ interface StateEnvelope {
 
 const sortByConnectionId = (a: Types.PresenceMessage, b: Types.PresenceMessage) => (a.connectionId as any) - (b.connectionId as any);
 
+type SetStateAction<S> = S | ((prevState: S) => S);
+
+export type ReactUseStateCallback<T> = (arg0: SetStateAction<T>) => void;
 export type LeaderStateUpdateFunction<T> = (state: T) => void;
 export type LeaderStateUpdateCallback<T> = (arg0: T) => void;
-export type UseStateResponse<T> = [T, LeaderStateUpdateFunction<T>, boolean];
+export type UseStateResponse<T> = [T, ReactUseStateCallback<T>, boolean];
 
-export function usePeerSharedState<T = any>(channelNameOrNameAndOptions: ChannelParameters, defaultLeaderState: T, onElection: LeaderStateUpdateCallback<T>): UseStateResponse<T> {
+export function usePeerSharedState<T = any>(channelNameOrNameAndOptions: ChannelParameters, defaultLeaderState: T, onElection: LeaderStateUpdateCallback<T> = null): UseStateResponse<T> {
     const ably = assertConfiguration();
 
     const [leaderId, setLeaderId] = useState("");
     const [leaderData, setLeaderData] = useState<T>(defaultLeaderState);
-    const [requiresElectionBroadcast, setRequiresElectionBroadcast] = useState(false);
+
+    const [broadcast, setBroadcast] = useState<boolean>(false);
+    const [triggerElection, setTriggerElection] = useState<boolean>(false);
 
     const channelName = typeof channelNameOrNameAndOptions === 'string'
         ? channelNameOrNameAndOptions
@@ -31,7 +36,7 @@ export function usePeerSharedState<T = any>(channelNameOrNameAndOptions: Channel
 
     const initalState: StateEnvelope = { leader: false, state: null };
 
-    const [presenceData, updateMyPresence] = usePresence(channelName, initalState, async (message) => {
+    const [_, updateMyPresence] = usePresence(channelName, initalState, async (message) => {
         if (message?.data?.leader) {
             setLeaderData(message.data.state);
         }
@@ -41,35 +46,42 @@ export function usePeerSharedState<T = any>(channelNameOrNameAndOptions: Channel
 
         if (leader) {
             setLeaderId(leader?.clientId + "");
+            setLeaderData(leader?.data?.state);
             return;
         }
 
         const sortedMembers = members.sort(sortByConnectionId);
-        const hasBeenElected = sortedMembers[0].clientId + "" === ably.auth?.clientId + "";
+        const hasBeenElected = sortedMembers[0]?.clientId + "" === ably.auth?.clientId + "";
 
         if (hasBeenElected) {
             setLeaderId(ably.auth?.clientId + "");
-            updateMyPresence({ leader: true, state: leaderData });
-            setRequiresElectionBroadcast(true);
+            setTriggerElection(true);
         }
     });
 
-    if (requiresElectionBroadcast) {
-        setRequiresElectionBroadcast(false);
-        onElection(leaderData);
+    if (triggerElection) {
+        updateMyPresence({ leader: true, state: leaderData });
+        onElection?.call(leaderData);
+        setTriggerElection(false);
     }
 
-    const leaderUpdateFunction = (state: T) => {
+    if (broadcast) {
         const isLeader = leaderId === ably.auth?.clientId + "";
-        updateMyPresence({ leader: isLeader, state: state });
+        updateMyPresence({ leader: isLeader, state: leaderData });
+        setBroadcast(false);
     }
 
-    const nonLeaderUpdateFunction = (state: T) => {
+    const nonLeaderUpdateFunction = (update: SetStateAction<T>) => {
+        setLeaderData(update);
+    }
+
+    const leaderUpdateFunction = (update: SetStateAction<T>) => {
+        setLeaderData(update);
+        setBroadcast(true);
     }
 
     const isHost = leaderId === ably.auth?.clientId + "";
-    const broadcastIfHost = isHost ? leaderUpdateFunction : (_: T) => { /* NOOP */ };
+    const updateFunc = isHost ? leaderUpdateFunction : nonLeaderUpdateFunction;
 
-    return [leaderData, broadcastIfHost, isHost];
-
+    return [leaderData, updateFunc, isHost];
 }
